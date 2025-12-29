@@ -66,12 +66,17 @@
 
     <script>
         /**
-         * PAM'S ADVENTURE - MUSIC INTEGRATION V2
-         * Soporta ejecución local y en servidor.
+         * PAM'S ADVENTURE - MUSIC INTEGRATION V3
          */
 
         let playerYT;
-        const videoId = 'Hweqfxsrgac';
+        const tracks = {
+            MENU: 'fDzPL9hNpUA',
+            LEVEL: 'Hweqfxsrgac',
+            GAMEOVER: 'BVQ_JHmvhCM'
+        };
+
+        let currentTrack = '';
 
         // Intentar obtener el origen de forma segura
         let origin = window.location.origin;
@@ -81,35 +86,42 @@
             playerYT = new YT.Player('youtube-player', {
                 height: '0',
                 width: '0',
-                videoId: videoId,
+                videoId: tracks.MENU,
                 playerVars: {
                     'autoplay': 1,
                     'loop': 1,
-                    'playlist': videoId,
+                    'playlist': tracks.MENU,
                     'controls': 0,
-                    'showinfo': 0,
-                    'rel': 0,
                     'mute': 0,
                     'origin': origin
                 },
                 events: {
                     'onReady': (event) => {
                         console.log("Sistema de audio listo.");
-                        // Algunos navegadores requieren un gesto para desmutear
+                        currentTrack = tracks.MENU;
                         event.target.setVolume(50);
                     },
                     'onStateChange': (event) => {
-                        // Forzar bucle infinito si se detiene
                         if (event.data === YT.PlayerState.ENDED) {
                             playerYT.playVideo();
                         }
-                    },
-                    'onError': (e) => {
-                        console.warn("YouTube API Error:", e.data);
                     }
                 }
             });
         };
+
+        function changeTrack(videoId) {
+            if (!playerYT || !playerYT.loadVideoById || currentTrack === videoId) return;
+            console.log("Cambiando pista a:", videoId);
+            currentTrack = videoId;
+            playerYT.loadVideoById({
+                videoId: videoId,
+                startSeconds: 0,
+                suggestedQuality: 'small'
+            });
+            // Asegurar que el playlist también se actualice para el loop nativo de YT
+            if (playerYT.setLoop) playerYT.setLoop(true);
+        }
 
         // Cargar la API de YouTube de forma dinámica
         (function () {
@@ -162,20 +174,20 @@
         class MenuScene extends Phaser.Scene {
             constructor() { super('MenuScene'); }
             create() {
+                changeTrack(tracks.MENU);
                 this.add.rectangle(400, 225, 800, 450, 0x1a237e);
                 this.add.text(400, 150, "PAM'S ADVENTURE", { fontSize: '64px', fill: '#FF9800', stroke: '#000', strokeThickness: 6 }).setOrigin(0.5);
                 this.add.image(400, 260, 'pam').setScale(4);
                 const startBtn = this.add.text(400, 370, "COMENZAR AVENTURA", { fontSize: '24px', fill: '#FFF', backgroundColor: '#E65100', padding: 15 }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
                 startBtn.on('pointerdown', () => {
-                    // Intento forzado de reproducción al interactuar
-                    if (playerYT) {
-                        try {
-                            playerYT.unMute();
-                            playerYT.setVolume(60);
-                            playerYT.playVideo();
-                        } catch (e) { console.error("Error al iniciar audio:", e); }
+                    // Iniciar audio en el primer click si no ha empezado
+                    if (playerYT && playerYT.playVideo) {
+                        playerYT.unMute();
+                        playerYT.setVolume(50);
+                        playerYT.playVideo();
                     }
+                    changeTrack(tracks.LEVEL);
                     gameState.level = 1; gameState.lives = 3;
                     this.scene.start('UIScene');
                     this.scene.start('GameScene');
@@ -225,6 +237,7 @@
                 this.physics.add.overlap(this.player, this.enemies, this.onHit, null, this);
                 this.physics.add.overlap(this.player, this.goal, this.winLevel, null, this);
 
+                changeTrack(tracks.LEVEL);
                 this.game.events.emit('updateUI');
                 this.invulnerable = false;
             }
@@ -284,7 +297,7 @@
                 this.game.events.emit('updateUI');
                 this.cameras.main.shake(300, 0.03);
                 if (gameState.lives <= 0) {
-                    if (playerYT) playerYT.pauseVideo();
+                    changeTrack(tracks.GAMEOVER);
                     this.scene.start('GameOverScene');
                     this.scene.stop('UIScene');
                     return;
@@ -308,7 +321,7 @@
                     gameState.level++;
                     this.scene.restart();
                 } else {
-                    if (playerYT) playerYT.pauseVideo();
+                    changeTrack(tracks.MENU);
                     this.scene.start('WinScene');
                     this.scene.stop('UIScene');
                 }
@@ -318,11 +331,12 @@
         class GameOverScene extends Phaser.Scene {
             constructor() { super('GameOverScene'); }
             create() {
+                changeTrack(tracks.GAMEOVER);
                 this.add.rectangle(400, 225, 800, 450, 0x000000);
                 this.add.text(400, 180, "¡PAM HA SIDO ATRAPADA!", { fontSize: '42px', fill: '#f00' }).setOrigin(0.5);
                 const contBtn = this.add.text(400, 280, "INTENTAR DE NUEVO", { fontSize: '24px', fill: '#fff', backgroundColor: '#333', padding: 10 }).setOrigin(0.5).setInteractive();
                 contBtn.on('pointerdown', () => {
-                    if (playerYT) playerYT.playVideo();
+                    changeTrack(tracks.LEVEL);
                     gameState.lives = 3;
                     this.scene.start('UIScene');
                     this.scene.start('GameScene');
