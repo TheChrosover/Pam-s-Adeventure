@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pam's Adventure - 16 Bit Edition</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0d0d0d;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            box-shadow: 0 0 30px rgba(255, 140, 0, 0.3);
+            border: 6px solid #222;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .controls {
+            margin-top: 15px;
+            text-align: center;
+            font-size: 16px;
+            color: #ff8c00;
+            text-shadow: 1px 1px #000;
+        }
+
+        kbd {
+            background-color: #333;
+            border: 2px solid #666;
+            border-radius: 4px;
+            padding: 2px 8px;
+            color: #fff;
+        }
+
+        /* Ocultar el reproductor de YouTube pero permitir que cargue */
+        #youtube-player {
+            position: absolute;
+            top: -1000px;
+            left: -1000px;
+            width: 1px;
+            height: 1px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+</head>
+
+<body>
+
+    <div id="youtube-player"></div>
+    <div id="game-container"></div>
+    <div class="controls">
+        <p>Mover: <kbd>⬅️</kbd> <kbd>➡️</kbd> | Saltar: <kbd>⬆️</kbd></p>
+    </div>
+
+    <script>
+        /**
+         * PAM'S ADVENTURE - MUSIC INTEGRATION REFIX
+         */
+
+        // --- YOUTUBE API SETUP ---
+        let playerYT;
+        const videoId = 'Hweqfxsrgac';
+
+        // Esta función debe ser global para que la API de YouTube la encuentre
+        window.onYouTubeIframeAPIReady = function () {
+            playerYT = new YT.Player('youtube-player', {
+                height: '1',
+                width: '1',
+                videoId: videoId,
+                playerVars: {
+                    'autoplay': 1,
+                    'loop': 1,
+                    'playlist': videoId,
+                    'controls': 0,
+                    'mute': 0,
+                    'origin': window.location.origin
+                },
+                events: {
+                    'onReady': (event) => {
+                        console.log("Música lista para sonar");
+                    },
+                    'onStateChange': (event) => {
+                        // Si el video termina, forzar el bucle
+                        if (event.data === YT.PlayerState.ENDED) {
+                            playerYT.playVideo();
+                        }
+                    }
+                }
+            });
+        };
+
+        // Cargar la API de YouTube
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        // --- LÓGICA DEL JUEGO ---
+
+        const gameState = {
+            level: 1,
+            lives: 3,
+            maxLevels: 3
+        };
+
+        class BootScene extends Phaser.Scene {
+            constructor() { super('BootScene'); }
+            preload() { this.createPixelAssets(); }
+            createPixelAssets() {
+                const createTex = (key, width, height, drawFn) => {
+                    const g = this.make.graphics();
+                    drawFn(g);
+                    g.generateTexture(key, width, height);
+                    g.destroy();
+                };
+
+                createTex('pam', 32, 32, (g) => {
+                    g.fillStyle(0xE65100); g.fillRect(4, 4, 24, 24);
+                    g.fillStyle(0xFF9800); g.fillRect(4, 4, 22, 22);
+                    g.fillStyle(0xFFFFFF); g.fillRect(8, 10, 6, 6); g.fillRect(18, 10, 6, 6);
+                    g.fillStyle(0x000000); g.fillRect(11, 12, 3, 3); g.fillRect(21, 12, 3, 3);
+                    g.fillStyle(0xE65100); g.fillRect(4, 0, 8, 8); g.fillRect(20, 0, 8, 8);
+                });
+
+                createTex('enemy1', 32, 32, (g) => { g.fillStyle(0x757575); g.fillRect(4, 12, 24, 16); g.fillStyle(0x000000); g.fillRect(18, 16, 3, 3); g.fillStyle(0xFF80AB); g.fillRect(28, 14, 4, 2); });
+                createTex('enemy2', 32, 32, (g) => { g.fillStyle(0x4E342E); g.fillRect(4, 4, 24, 24); g.fillStyle(0xFF5252); g.fillRect(8, 8, 16, 4); });
+                createTex('enemy3', 32, 32, (g) => { g.fillStyle(0x263238); g.fillRect(4, 4, 24, 24); g.fillStyle(0x00E5FF); g.fillRect(10, 10, 12, 12); });
+
+                createTex('ground1', 32, 32, (g) => { g.fillStyle(0xFFE082); g.fillRect(0, 0, 32, 32); g.fillStyle(0xFFD54F); g.fillRect(0, 0, 32, 4); });
+                createTex('ground2', 32, 32, (g) => { g.fillStyle(0xD84315); g.fillRect(0, 0, 32, 32); g.fillStyle(0xFF5722); g.fillRect(0, 0, 32, 4); });
+                createTex('ground3', 32, 32, (g) => { g.fillStyle(0x37474F); g.fillRect(0, 0, 32, 32); g.fillStyle(0x90A4AE); g.fillRect(0, 0, 32, 4); });
+
+                createTex('goal', 80, 50, (g) => { g.fillStyle(0x1565C0); g.fillRect(0, 10, 80, 40); g.fillStyle(0x1E88E5); g.fillRect(15, 0, 50, 20); g.fillStyle(0x212121); g.fillCircle(15, 40, 10); g.fillCircle(65, 40, 10); });
+            }
+            create() { this.scene.start('MenuScene'); }
+        }
+
+        class MenuScene extends Phaser.Scene {
+            constructor() { super('MenuScene'); }
+            create() {
+                this.add.rectangle(400, 225, 800, 450, 0x1a237e);
+                this.add.text(400, 150, "PAM'S ADVENTURE", { fontSize: '64px', fill: '#FF9800', stroke: '#000', strokeThickness: 6 }).setOrigin(0.5);
+                this.add.image(400, 260, 'pam').setScale(4);
+                const startBtn = this.add.text(400, 370, "COMENZAR AVENTURA", { fontSize: '24px', fill: '#FFF', backgroundColor: '#E65100', padding: 15 }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+                startBtn.on('pointerdown', () => {
+                    // Intento forzado de reproducción al interactuar
+                    if (playerYT) {
+                        try {
+                            playerYT.unMute();
+                            playerYT.setVolume(60);
+                            playerYT.playVideo();
+                        } catch (e) { console.error("Error al iniciar audio:", e); }
+                    }
+                    gameState.level = 1; gameState.lives = 3;
+                    this.scene.start('UIScene');
+                    this.scene.start('GameScene');
+                });
+            }
+        }
+
+        class UIScene extends Phaser.Scene {
+            constructor() { super('UIScene'); }
+            create() {
+                this.livesText = this.add.text(25, 25, '', { fontSize: '24px', fill: '#FFF', stroke: '#000', strokeThickness: 4 });
+                this.lvlText = this.add.text(550, 25, '', { fontSize: '24px', fill: '#FFD54F', stroke: '#000', strokeThickness: 4 });
+                this.game.events.on('updateUI', this.updateUI, this);
+                this.updateUI();
+            }
+            updateUI() {
+                if (this.livesText) this.livesText.setText('❤️ VIDAS: ' + gameState.lives);
+                if (this.lvlText) {
+                    const names = ["", "PISCO", "ICA", "LIMA"];
+                    this.lvlText.setText('NIVEL ' + gameState.level + ': ' + (names[gameState.level] || "FIN"));
+                }
+            }
+        }
+
+        class GameScene extends Phaser.Scene {
+            constructor() { super('GameScene'); }
+
+            create() {
+                const worldWidth = 4000;
+                this.physics.world.setBounds(0, 0, worldWidth, 600);
+                this.createBackground();
+                this.platforms = this.physics.add.staticGroup();
+                this.enemies = this.physics.add.group();
+                this.setupLevel(worldWidth);
+
+                this.player = this.physics.add.sprite(100, 300, 'pam');
+                this.player.setCollideWorldBounds(true);
+                this.player.setDepth(10);
+                this.player.body.setGravityY(400);
+
+                this.cameras.main.setBounds(0, 0, worldWidth, 450);
+                this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+                this.cursors = this.input.keyboard.createCursorKeys();
+
+                this.physics.add.collider(this.player, this.platforms);
+                this.physics.add.collider(this.enemies, this.platforms);
+                this.physics.add.overlap(this.player, this.enemies, this.onHit, null, this);
+                this.physics.add.overlap(this.player, this.goal, this.winLevel, null, this);
+
+                this.game.events.emit('updateUI');
+                this.invulnerable = false;
+            }
+
+            createBackground() {
+                const bgColors = ["", "#4FC3F7", "#FFB74D", "#263238"];
+                this.cameras.main.setBackgroundColor(bgColors[gameState.level] || "#000");
+            }
+
+            setupLevel(width) {
+                const groundKey = 'ground' + gameState.level;
+                const enemyKey = 'enemy' + gameState.level;
+                for (let x = 0; x < width; x += 32) {
+                    if (x > 600 && x < width - 600 && Math.random() < 0.05) { x += 32; continue; }
+                    this.platforms.create(x, 434, groundKey).refreshBody();
+                }
+                for (let x = 400; x < width - 500; x += 250) {
+                    this.spawnEnemy(x + Phaser.Math.Between(0, 100), 380, enemyKey);
+                    if (Math.random() > 0.5) {
+                        let py = Phaser.Math.Between(200, 300);
+                        for (let i = 0; i < 3; i++) this.platforms.create(x + (i * 32), py, groundKey).refreshBody();
+                        this.spawnEnemy(x + 32, py - 40, enemyKey);
+                    }
+                }
+                this.goal = this.physics.add.sprite(width - 150, 380, 'goal');
+                this.goal.body.setAllowGravity(false);
+            }
+
+            spawnEnemy(x, y, key) {
+                let enemy = this.enemies.create(x, y, key);
+                enemy.setVelocityX((gameState.level * -40) - 60);
+                enemy.setBounceX(1);
+                enemy.setCollideWorldBounds(true);
+            }
+
+            update() {
+                if (!this.player || !this.player.body) return;
+                if (this.cursors.left.isDown) { this.player.setVelocityX(-260); this.player.setFlipX(true); }
+                else if (this.cursors.right.isDown) { this.player.setVelocityX(260); this.player.setFlipX(false); }
+                else { this.player.setVelocityX(0); }
+                if (this.cursors.up.isDown && this.player.body.touching.down) this.player.setVelocityY(-660);
+                if (this.player.y > 520) this.handleDeath(true);
+            }
+
+            onHit(player, enemy) {
+                if (this.invulnerable) return;
+                if (player.body.velocity.y > 0 && player.y < enemy.y - 10) {
+                    enemy.destroy();
+                    player.setVelocityY(-400);
+                    return;
+                }
+                this.handleDeath(false);
+            }
+
+            handleDeath(isFall) {
+                gameState.lives--;
+                this.game.events.emit('updateUI');
+                this.cameras.main.shake(300, 0.03);
+                if (gameState.lives <= 0) {
+                    if (playerYT) playerYT.pauseVideo();
+                    this.scene.start('GameOverScene');
+                    this.scene.stop('UIScene');
+                    return;
+                }
+                if (isFall) {
+                    this.physics.pause();
+                    this.player.setTint(0xff0000);
+                    this.time.delayedCall(800, () => this.scene.restart());
+                } else {
+                    this.invulnerable = true;
+                    this.player.setTint(0xff0000);
+                    this.time.delayedCall(2000, () => {
+                        this.invulnerable = false;
+                        if (this.player) this.player.clearTint();
+                    });
+                }
+            }
+
+            winLevel() {
+                if (gameState.level < gameState.maxLevels) {
+                    gameState.level++;
+                    this.scene.restart();
+                } else {
+                    if (playerYT) playerYT.pauseVideo();
+                    this.scene.start('WinScene');
+                    this.scene.stop('UIScene');
+                }
+            }
+        }
+
+        class GameOverScene extends Phaser.Scene {
+            constructor() { super('GameOverScene'); }
+            create() {
+                this.add.rectangle(400, 225, 800, 450, 0x000000);
+                this.add.text(400, 180, "¡PAM HA SIDO ATRAPADA!", { fontSize: '42px', fill: '#f00' }).setOrigin(0.5);
+                const contBtn = this.add.text(400, 280, "INTENTAR DE NUEVO", { fontSize: '24px', fill: '#fff', backgroundColor: '#333', padding: 10 }).setOrigin(0.5).setInteractive();
+                contBtn.on('pointerdown', () => {
+                    if (playerYT) playerYT.playVideo();
+                    gameState.lives = 3;
+                    this.scene.start('UIScene');
+                    this.scene.start('GameScene');
+                });
+            }
+        }
+
+        class WinScene extends Phaser.Scene {
+            constructor() { super('WinScene'); }
+            create() {
+                this.add.rectangle(400, 225, 800, 450, 0x1b5e20);
+                this.add.text(400, 200, "¡LO LOGRASTE!", { fontSize: '48px', fill: '#fff' }).setOrigin(0.5);
+                this.add.text(400, 360, "MENU PRINCIPAL", { fontSize: '20px', fill: '#fff', backgroundColor: '#000', padding: 10 }).setOrigin(0.5).setInteractive().on('pointerdown', () => this.scene.start('MenuScene'));
+            }
+        }
+
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 450,
+            parent: 'game-container',
+            pixelArt: true,
+            physics: { default: 'arcade', arcade: { gravity: { y: 1000 } } },
+            scene: [BootScene, MenuScene, GameScene, UIScene, GameOverScene, WinScene]
+        };
+        new Phaser.Game(config);
+    </script>
+</body>
+
+</html>
