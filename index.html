@@ -66,7 +66,7 @@
 
     <script>
         /**
-         * PAM'S ADVENTURE - MUSIC INTEGRATION V5 (Final Logic)
+         * PAM'S ADVENTURE - MUSIC INTEGRATION V6 (Aggressive Play Fix)
          */
 
         let playerYT;
@@ -112,9 +112,10 @@
             });
         };
 
-        function changeTrack(videoId, shouldLoop = true) {
+        function changeTrack(videoId, shouldLoop = true, force = false) {
             if (!isPlayerReady || !playerYT) return;
-            if (currentTrack === videoId && playerYT.getPlayerState() === 1) return;
+            // Solo ignorar si es la misma canción Y ya está sonando (y no estamos forzando)
+            if (!force && currentTrack === videoId && playerYT.getPlayerState() === 1) return;
 
             console.log("Cambiando pista a:", videoId, "Bucle:", shouldLoop);
             currentTrack = videoId;
@@ -131,15 +132,19 @@
         }
 
         // Listener global para activar el audio del menú en el primer click
-        window.addEventListener('mousedown', function startMenuAudio() {
-            if (isPlayerReady && playerYT && currentTrack === tracks.MENU) {
-                playerYT.unMute();
-                playerYT.setVolume(50);
-                playerYT.playVideo();
-                console.log("Audio de menú desbloqueado por usuario.");
-                window.removeEventListener('mousedown', startMenuAudio);
+        function activateAudio() {
+            if (isPlayerReady && playerYT) {
+                console.log("Activando audio del menú por interacción de usuario.");
+                changeTrack(tracks.MENU, true, true);
+                window.removeEventListener('click', activateAudio);
+                window.removeEventListener('mousedown', activateAudio);
+                window.removeEventListener('keydown', activateAudio);
             }
-        }, { once: true });
+        }
+
+        window.addEventListener('click', activateAudio);
+        window.addEventListener('mousedown', activateAudio);
+        window.addEventListener('keydown', activateAudio);
 
         // Cargar la API de YouTube de forma dinámica
         (function () {
