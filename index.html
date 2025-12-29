@@ -66,46 +66,58 @@
 
     <script>
         /**
-         * PAM'S ADVENTURE - MUSIC INTEGRATION REFIX
+         * PAM'S ADVENTURE - MUSIC INTEGRATION V2
+         * Soporta ejecución local y en servidor.
          */
 
-        // --- YOUTUBE API SETUP ---
         let playerYT;
         const videoId = 'Hweqfxsrgac';
 
-        // Esta función debe ser global para que la API de YouTube la encuentre
+        // Intentar obtener el origen de forma segura
+        let origin = window.location.origin;
+        if (origin === "null" || !origin) origin = "*";
+
         window.onYouTubeIframeAPIReady = function () {
             playerYT = new YT.Player('youtube-player', {
-                height: '1',
-                width: '1',
+                height: '0',
+                width: '0',
                 videoId: videoId,
                 playerVars: {
                     'autoplay': 1,
                     'loop': 1,
                     'playlist': videoId,
                     'controls': 0,
+                    'showinfo': 0,
+                    'rel': 0,
                     'mute': 0,
-                    'origin': window.location.origin
+                    'origin': origin
                 },
                 events: {
                     'onReady': (event) => {
-                        console.log("Música lista para sonar");
+                        console.log("Sistema de audio listo.");
+                        // Algunos navegadores requieren un gesto para desmutear
+                        event.target.setVolume(50);
                     },
                     'onStateChange': (event) => {
-                        // Si el video termina, forzar el bucle
+                        // Forzar bucle infinito si se detiene
                         if (event.data === YT.PlayerState.ENDED) {
                             playerYT.playVideo();
                         }
+                    },
+                    'onError': (e) => {
+                        console.warn("YouTube API Error:", e.data);
                     }
                 }
             });
         };
 
-        // Cargar la API de YouTube
-        const tag = document.createElement('script');
-        tag.src = "https://www.youtube.com/iframe_api";
-        const firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        // Cargar la API de YouTube de forma dinámica
+        (function () {
+            const tag = document.createElement('script');
+            tag.src = "https://www.youtube.com/iframe_api";
+            const firstScriptTag = document.getElementsByTagName('script')[0];
+            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        })();
 
         // --- LÓGICA DEL JUEGO ---
 
