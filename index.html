@@ -66,7 +66,7 @@
 
     <script>
         /**
-         * PAM'S ADVENTURE - MUSIC INTEGRATION V4 (Robust Autoplay Fix)
+         * PAM'S ADVENTURE - MUSIC INTEGRATION V5 (Final Logic)
          */
 
         let playerYT;
@@ -78,6 +78,7 @@
 
         let currentTrack = '';
         let isPlayerReady = false;
+        let loopCurrent = true;
 
         // Intentar obtener el origen de forma segura
         let origin = window.location.origin;
@@ -103,7 +104,7 @@
                         currentTrack = tracks.MENU;
                     },
                     'onStateChange': (event) => {
-                        if (event.data === YT.PlayerState.ENDED) {
+                        if (event.data === YT.PlayerState.ENDED && loopCurrent) {
                             playerYT.playVideo();
                         }
                     }
@@ -111,12 +112,14 @@
             });
         };
 
-        function changeTrack(videoId) {
-            if (!isPlayerReady || !playerYT || currentTrack === videoId) return;
-            console.log("Cambiando pista a:", videoId);
-            currentTrack = videoId;
+        function changeTrack(videoId, shouldLoop = true) {
+            if (!isPlayerReady || !playerYT) return;
+            if (currentTrack === videoId && playerYT.getPlayerState() === 1) return;
 
-            // Si el video ya está cargado pero silenciado, desmutear antes de cambiar
+            console.log("Cambiando pista a:", videoId, "Bucle:", shouldLoop);
+            currentTrack = videoId;
+            loopCurrent = shouldLoop;
+
             playerYT.unMute();
             playerYT.setVolume(50);
 
@@ -126,6 +129,17 @@
                 suggestedQuality: 'small'
             });
         }
+
+        // Listener global para activar el audio del menú en el primer click
+        window.addEventListener('mousedown', function startMenuAudio() {
+            if (isPlayerReady && playerYT && currentTrack === tracks.MENU) {
+                playerYT.unMute();
+                playerYT.setVolume(50);
+                playerYT.playVideo();
+                console.log("Audio de menú desbloqueado por usuario.");
+                window.removeEventListener('mousedown', startMenuAudio);
+            }
+        }, { once: true });
 
         // Cargar la API de YouTube de forma dinámica
         (function () {
@@ -187,25 +201,17 @@
                 const startBtn = this.add.text(400, 370, "COMENZAR AVENTURA", { fontSize: '24px', fill: '#FFF', backgroundColor: '#E65100', padding: 15 }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
                 startBtn.on('pointerdown', () => {
-                    // Acción CAPITULAR: Desmutear y forzar reproducción tras el click del usuario
-                    if (playerYT && playerYT.playVideo) {
+                    // Asegurar que el audio esté activado
+                    if (playerYT && playerYT.unMute) {
                         playerYT.unMute();
                         playerYT.setVolume(50);
                         playerYT.playVideo();
-
-                        // Pequeño delay para asegurar que el comando de 'unmute' se procese antes del cambio de ID de video
-                        this.time.delayedCall(100, () => {
-                            changeTrack(tracks.LEVEL);
-                            gameState.level = 1; gameState.lives = 3;
-                            this.scene.start('UIScene');
-                            this.scene.start('GameScene');
-                        });
-                    } else {
-                        // Si por algún motivo no hay player, continuar con el juego
-                        gameState.level = 1; gameState.lives = 3;
-                        this.scene.start('UIScene');
-                        this.scene.start('GameScene');
                     }
+
+                    changeTrack(tracks.LEVEL, true);
+                    gameState.level = 1; gameState.lives = 3;
+                    this.scene.start('UIScene');
+                    this.scene.start('GameScene');
                 });
             }
         }
@@ -312,7 +318,7 @@
                 this.game.events.emit('updateUI');
                 this.cameras.main.shake(300, 0.03);
                 if (gameState.lives <= 0) {
-                    changeTrack(tracks.GAMEOVER);
+                    changeTrack(tracks.GAMEOVER, false); // Game Over suena una sola vez
                     this.scene.start('GameOverScene');
                     this.scene.stop('UIScene');
                     return;
@@ -346,12 +352,11 @@
         class GameOverScene extends Phaser.Scene {
             constructor() { super('GameOverScene'); }
             create() {
-                changeTrack(tracks.GAMEOVER);
                 this.add.rectangle(400, 225, 800, 450, 0x000000);
                 this.add.text(400, 180, "¡PAM HA SIDO ATRAPADA!", { fontSize: '42px', fill: '#f00' }).setOrigin(0.5);
                 const contBtn = this.add.text(400, 280, "INTENTAR DE NUEVO", { fontSize: '24px', fill: '#fff', backgroundColor: '#333', padding: 10 }).setOrigin(0.5).setInteractive();
                 contBtn.on('pointerdown', () => {
-                    changeTrack(tracks.LEVEL);
+                    changeTrack(tracks.LEVEL, true);
                     gameState.lives = 3;
                     this.scene.start('UIScene');
                     this.scene.start('GameScene');
